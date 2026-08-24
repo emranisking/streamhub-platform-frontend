@@ -32,8 +32,16 @@ const likeBusy = ref(false)
 const showPlaylistModal = ref(false)
 
 const manifestSrc = computed(() =>
-  playback.value && !playback.value.locked ? mediaUrl(playback.value.manifestUrl) : null
+  playback.value && !playback.value.locked ? playback.value.manifestUrl : null
 )
+
+// ⭐ NEW: Get thumbnail URL using video ID
+const thumbnailUrl = computed(() => {
+  if (video.value) {
+    return mediaUrl(video.value.id, video.value.thumbnailUrl)
+  }
+  return ''
+})
 
 async function load() {
   loading.value = true
