@@ -5,12 +5,30 @@ import { formatViews, formatRelativeTime } from '../composables/useFormat'
 defineProps({
   video: { type: Object, required: true }
 })
+
+// Helper to handle image load errors
+function handleImageError(event) {
+  // You can set a placeholder image here
+  // event.target.src = '/placeholder-thumbnail.jpg'
+  event.target.style.display = 'none'
+  // Or show a fallback div
+  const parent = event.target.parentElement
+  const fallback = document.createElement('div')
+  fallback.className = 'thumb-fallback'
+  fallback.textContent = '📹'
+  parent.appendChild(fallback)
+}
 </script>
 
 <template>
   <RouterLink :to="{ name: 'watch', params: { id: video.id } }" class="video-card">
     <div class="thumb-wrap">
-      <img :src="mediaUrl(video.thumbnailUrl)" :alt="video.title" loading="lazy" />
+      <img 
+        :src="mediaUrl(video.id, video.thumbnailUrl)" 
+        :alt="video.title" 
+        loading="lazy"
+        @error="handleImageError"
+      />
     </div>
     <div class="video-meta">
       <div class="avatar-dot">{{ (video.categoryName || '?').charAt(0) }}</div>
@@ -36,6 +54,7 @@ defineProps({
   border-radius: var(--yt-radius);
   overflow: hidden;
   background: var(--yt-bg-secondary);
+  position: relative;
 }
 .thumb-wrap img {
   width: 100%;
@@ -45,6 +64,16 @@ defineProps({
 }
 .video-card:hover .thumb-wrap img {
   transform: scale(1.02);
+}
+.thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  background: var(--yt-bg-secondary);
+  color: var(--yt-text-secondary);
 }
 .video-meta {
   display: flex;
