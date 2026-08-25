@@ -1,3 +1,4 @@
+<!-- views/WatchView.vue -->
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -9,7 +10,7 @@ import VideoCard from '../components/VideoCard.vue'
 import { fetchVideo, bumpViews, listVideos } from '../api/videos'
 import { getPlayback } from '../api/playback'
 import { listLikes, toggleLike } from '../api/likes'
-import { mediaUrl } from '../composables/useMediaUrl'
+import { mediaUrl, getManifestUrl } from '../composables/useMediaUrl'
 import { formatViews, formatRelativeTime } from '../composables/useFormat'
 import { useGuestSession } from '../composables/useGuestSession'
 import { useAuthStore } from '../stores/auth'
@@ -31,11 +32,20 @@ const liked = ref(false)
 const likeBusy = ref(false)
 const showPlaylistModal = ref(false)
 
-const manifestSrc = computed(() =>
-  playback.value && !playback.value.locked ? playback.value.manifestUrl : null
-)
+// ⭐ FIXED: Use getManifestUrl for video playback
+const manifestSrc = computed(() => {
+  if (playback.value && !playback.value.locked && playback.value.manifestUrl) {
+    console.log('🎬 Playback response:', playback.value)
+    console.log('🎬 Manifest URL from API:', playback.value.manifestUrl)
+    const url = getManifestUrl(playback.value.manifestUrl)
+    console.log('🎬 Final manifest URL:', url)
+    return url
+  }
+  console.log('🎬 No manifest URL available (locked or missing)')
+  return null
+})
 
-// ⭐ NEW: Get thumbnail URL using video ID
+// Get thumbnail URL using video ID
 const thumbnailUrl = computed(() => {
   if (video.value) {
     return mediaUrl(video.value.id, video.value.thumbnailUrl)
@@ -50,15 +60,20 @@ async function load() {
   try {
     const sessionId = auth.isAuthenticated ? undefined : useGuestSession()
 
+    console.log('🎬 Loading video:', props.id)
+    
     const [videoData, playbackData] = await Promise.all([
       fetchVideo(props.id),
       getPlayback(props.id, sessionId)
     ])
+    
+    console.log('🎬 Video data received:', videoData)
+    console.log('🎬 Playback data received:', playbackData)
+    
     video.value = videoData
     playback.value = playbackData
 
-    // Fire-and-forget: bumps the view counter and (if logged in) writes a
-    // history row. Not blocking the render on this.
+    // Fire-and-forget: bumps the view counter
     bumpViews(props.id).then((updated) => {
       if (video.value) video.value.views = updated.views
     }).catch(() => {})
@@ -77,6 +92,7 @@ async function load() {
       })
       .catch(() => {})
   } catch (e) {
+    console.error('🎬 Error loading video:', e)
     ui.pushToast(e.message, 'error')
   } finally {
     loading.value = false
@@ -108,6 +124,11 @@ function onSaveClick() {
   showPlaylistModal.value = true
 }
 
+function onPlayerError(error) {
+  console.error('🎬 Player error:', error)
+  ui.pushToast('Error playing video. Please try again.', 'error')
+}
+
 onMounted(load)
 watch(() => props.id, load)
 watch(() => route.params.id, () => {
@@ -121,8 +142,16 @@ watch(() => route.params.id, () => {
       <LoadingSpinner v-if="loading" />
       <template v-else-if="video">
         <div class="player-wrap">
-          <VideoPlayer v-if="manifestSrc" :src="manifestSrc" />
-          <div v-else class="player-placeholder"></div>
+          <VideoPlayer 
+            v-if="manifestSrc" 
+            :src="manifestSrc"
+            @playing="() => console.log('🎬 Video is playing')"
+            @error="onPlayerError"
+          />
+          <div v-else class="player-placeholder">
+            <p v-if="playback?.locked" class="locked-message">Video is locked</p>
+            <p v-else class="loading-message">Loading video...</p>
+          </div>
           <LockedOverlay
             v-if="playback?.locked"
             :reason="playback.reason"
@@ -191,6 +220,11 @@ watch(() => route.params.id, () => {
 .player-placeholder {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #1a1a1a;
 }
 .title {
   font-size: 20px;
