@@ -1,11 +1,7 @@
+// src/api/http.js
 import axios from 'axios'
+import router from '../router'
 import { useAuthStore } from '../stores/auth'
-
-// Every StreamHub response is wrapped as { success, message, data, timestamp }
-// (see API_DOCUMENTATION.md §"Base URL"). This client attaches the bearer
-// token when present, unwraps `data` on success, and normalizes errors to
-// the { status, error, message, fieldErrors } shape from §12 so components
-// never have to think about the envelope.
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -21,8 +17,6 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => {
-    // Unwrap the envelope. Keep the raw envelope available via `._envelope`
-    // for the rare call site that wants `message` (e.g. "Subscription activated").
     const body = response.data
     if (body && typeof body === 'object' && 'success' in body) {
       if (Array.isArray(body.data)) {
@@ -39,9 +33,18 @@ http.interceptors.response.use(
     const envelope = error.response?.data
 
     if (error.response?.status === 401) {
-      // Token missing/expired/invalid — drop the stale session so the UI
-      // falls back to guest behavior instead of looping on 401s.
+      const wasAuthenticated = auth.isAuthenticated
       auth.clearSession()
+
+      // Only bounce to login if we thought we were logged in and the
+      // current route actually requires auth — avoids redirect loops
+      // on public pages that happen to carry a stale token.
+      if (wasAuthenticated && router.currentRoute.value.meta.requiresAuth) {
+        router.replace({
+          name: 'login',
+          query: { redirect: router.currentRoute.value.fullPath }
+        })
+      }
     }
 
     const normalized = {
