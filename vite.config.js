@@ -22,6 +22,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiTarget,
           changeOrigin: true,
+          // This is critical for HttpOnly cookies during local development.
+          // It ensures the cookie is set for the frontend's domain (localhost:3000) 
+          // rather than the backend's domain (localhost:9000).
+          cookieDomainRewrite: 'localhost',
           rewrite: (path) => path
         },
         '/media': {
