@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
 import EmptyState from '../components/EmptyState.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue' // <-- Added import
 import * as playlistsApi from '../api/playlists'
 import { mediaUrl } from '../composables/useMediaUrl'
 import { useUiStore } from '../stores/ui'
@@ -11,6 +12,10 @@ const playlists = ref([])
 const loading = ref(true)
 const newTitle = ref('')
 const creating = ref(false)
+
+// Dialog state
+const dialogOpen = ref(false)
+const playlistToDelete = ref(null)
 
 async function load() {
   loading.value = true
@@ -38,14 +43,33 @@ async function createPlaylist() {
   }
 }
 
-async function removePlaylist(playlist) {
-  if (!confirm(`Delete "${playlist.title}"? This can't be undone.`)) return
+// 1. Open the custom dialog
+function askToDelete(playlist) {
+  playlistToDelete.value = playlist
+  dialogOpen.value = true
+}
+
+// 2. Cancel delete
+function cancelDelete() {
+  dialogOpen.value = false
+  playlistToDelete.value = null
+}
+
+// 3. Confirm and execute delete
+async function confirmDelete() {
+  if (!playlistToDelete.value) return
+  
+  const target = playlistToDelete.value
+  dialogOpen.value = false // Close dialog immediately
+  
   try {
-    await playlistsApi.deletePlaylist(playlist.id)
-    playlists.value = playlists.value.filter((p) => p.id !== playlist.id)
+    await playlistsApi.deletePlaylist(target.id)
+    playlists.value = playlists.value.filter((p) => p.id !== target.id)
     ui.pushToast('Playlist deleted.', 'success')
   } catch (e) {
     ui.pushToast(e.message, 'error')
+  } finally {
+    playlistToDelete.value = null
   }
 }
 
@@ -80,12 +104,25 @@ onMounted(load)
           <RouterLink :to="{ name: 'playlist-detail', params: { id: p.id } }" class="card-title">
             {{ p.title }}
           </RouterLink>
-          <button class="icon-btn" aria-label="Delete playlist" @click="removePlaylist(p)">
+          <!-- Changed to call askToDelete -->
+          <button class="icon-btn" aria-label="Delete playlist" @click="askToDelete(p)">
             <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M9 3h6l1 2h5v2H3V5h5zM6 8h12l-1 13H7z"/></svg>
           </button>
         </div>
       </div>
     </div>
+
+    <!-- Added the custom ConfirmDialog at the end -->
+    <ConfirmDialog
+      :is-open="dialogOpen"
+      title="Delete playlist?"
+      :message="`Are you sure you want to delete '${playlistToDelete?.title}'? This action cannot be undone.`"
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      :is-destructive="true"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 

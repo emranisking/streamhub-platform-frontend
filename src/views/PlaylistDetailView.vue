@@ -3,14 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
 import EmptyState from '../components/EmptyState.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue' // <-- Added import
 import * as playlistsApi from '../api/playlists'
 import { mediaUrl } from '../composables/useMediaUrl'
 import { formatViews } from '../composables/useFormat'
 import { useUiStore } from '../stores/ui'
 
-// GET /playlists returns every playlist with its items (there's no
-// single-playlist-by-id endpoint — see API_DOCUMENTATION.md §6), so we
-// fetch the full list and pick the one we need.
 const props = defineProps({
   id: { type: String, required: true }
 })
@@ -21,6 +19,9 @@ const router = useRouter()
 const playlists = ref([])
 const loading = ref(true)
 const busyVideoId = ref(null)
+
+// Dialog state
+const dialogOpen = ref(false)
 
 const playlist = computed(() => playlists.value.find((p) => p.id === props.id))
 const sortedItems = computed(() =>
@@ -64,9 +65,21 @@ async function move(item, direction) {
   }
 }
 
-async function removePlaylist() {
-  if (!playlist.value) return
-  if (!confirm(`Delete "${playlist.value.title}"? This can't be undone.`)) return
+// 1. Open the dialog
+function askToDelete() {
+  if (playlist.value) {
+    dialogOpen.value = true
+  }
+}
+
+// 2. Cancel
+function cancelDelete() {
+  dialogOpen.value = false
+}
+
+// 3. Confirm and execute
+async function confirmDelete() {
+  dialogOpen.value = false // Close immediately
   try {
     await playlistsApi.deletePlaylist(props.id)
     ui.pushToast('Playlist deleted.', 'success')
@@ -88,7 +101,8 @@ onMounted(load)
           <h1>{{ playlist.title }}</h1>
           <p class="sub">{{ sortedItems.length }} video{{ sortedItems.length === 1 ? '' : 's' }}</p>
         </div>
-        <button class="btn btn-danger-outline delete-btn" @click="removePlaylist">Delete playlist</button>
+        <!-- Changed to call askToDelete -->
+        <button class="btn btn-danger-outline delete-btn" @click="askToDelete">Delete playlist</button>
       </div>
 
       <EmptyState
@@ -144,6 +158,18 @@ onMounted(load)
       </ol>
     </template>
     <EmptyState v-else title="Playlist not found" message="It may have been deleted." />
+
+    <!-- Added the custom ConfirmDialog -->
+    <ConfirmDialog
+      :is-open="dialogOpen"
+      title="Delete playlist?"
+      :message="`Are you sure you want to delete '${playlist?.title}'? This action cannot be undone.`"
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      :is-destructive="true"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
@@ -228,14 +254,13 @@ onMounted(load)
 
 .item-info {
   flex: 1;
-  min-width: 0; /* Allows text truncation to work */
+  min-width: 0;
 }
 
 .item-title {
   font-size: 14px;
   font-weight: 500;
   display: block;
-  /* Title truncation for long titles */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -374,7 +399,7 @@ onMounted(load)
   .item-info {
     flex: 1;
     min-width: 0;
-    max-width: calc(100% - 80px - 30px); /* Account for thumbnail + actions */
+    max-width: calc(100% - 80px - 30px);
   }
 
   .item-title {
