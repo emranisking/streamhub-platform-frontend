@@ -10,8 +10,9 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
-// Restore session (token + user) from localStorage before the first render
-// so route guards see the correct auth state immediately.
-useAuthStore().hydrate()
+const auth = useAuthStore()
 
-app.mount('#app')
+// Attempt to silently log in before mounting the app
+auth.silentLogin().finally(() => {
+  app.mount('#app')
+})
